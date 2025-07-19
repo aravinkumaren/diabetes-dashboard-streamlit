@@ -1,72 +1,92 @@
 import streamlit as st
 import pandas as pd
+import seaborn as sns
 import matplotlib.pyplot as plt
-from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score
 
-st.set_page_config(page_title="Diabetes Dashboard", layout="wide")
+# Load dataset
+@st.cache_data
+def load_data():
+    return pd.read_csv("diabetes.csv")
 
-# Title
-st.title("🩺 Diabetes Prediction and Analysis")
+# Prediction function
+def predict_diabetes(model, input_data):
+    prediction = model.predict([input_data])
+    return "Diabetic" if prediction[0] == 1 else "Not Diabetic"
 
-# Load data
-df = pd.read_csv("data/Healthcare-Diabetes.csv")
+# Main dashboard logic
+def main():
+    st.set_page_config(page_title="Diabetes Dashboard", layout="centered")
+    st.title("Diabetes Prediction and Analysis Dashboard")
 
-st.markdown("## 📊 Filter Data")
+    # Load data
+    data = load_data()
 
-# Filters in two columns (not sidebar)
-col1, col2 = st.columns(2)
+    # Sidebar navigation
+    menu = ["Overview", "Data Exploration", "Prediction"]
+    choice = st.sidebar.selectbox("Menu", menu)
 
-with col1:
-    age_range = st.slider("Select Age Range", int(df["Age"].min()), int(df["Age"].max()), (25, 50))
+    if choice == "Overview":
+        st.subheader("Project Overview")
+        st.write("""
+        This dashboard is built to analyze and predict the likelihood of diabetes 
+        based on diagnostic data. Using machine learning (Logistic Regression), 
+        we aim to provide a quick prediction tool along with data insights.
+        """)
 
-with col2:
-    selected_preg = st.selectbox("Number of Pregnancies", sorted(df["Pregnancies"].unique()))
+        st.write("### Sample of the dataset")
+        st.dataframe(data.head())
 
-# Apply filters
-filtered_df = df[(df["Age"] >= age_range[0]) & (df["Age"] <= age_range[1]) & (df["Pregnancies"] == selected_preg)]
+        st.write("### Summary Statistics")
+        st.dataframe(data.describe())
 
-st.markdown("---")
-st.markdown("### 🧮 Summary Metrics")
+    elif choice == "Data Exploration":
+        st.subheader("Correlation Heatmap")
+        corr = data.corr()
+        fig, ax = plt.subplots(figsize=(10, 6))
+        sns.heatmap(corr, annot=True, cmap="coolwarm", ax=ax)
+        st.pyplot(fig)
 
-# Metrics in three columns
-m1, m2, m3 = st.columns(3)
+    elif choice == "Prediction":
+        st.subheader("Enter Patient Data for Prediction")
 
-m1.metric("Avg Glucose", round(filtered_df["Glucose"].mean(), 2))
-m2.metric("Avg BMI", round(filtered_df["BMI"].mean(), 2))
-m3.metric("Diabetes Cases", int(filtered_df["Outcome"].sum()))
+        # User Inputs
+        pregnancies = st.slider("Pregnancies", 0, 20, 1)
+        glucose = st.slider("Glucose", 0, 200, 100)
+        blood_pressure = st.slider("Blood Pressure", 0, 140, 70)
+        skin_thickness = st.slider("Skin Thickness", 0, 100, 20)
+        insulin = st.slider("Insulin", 0, 900, 80)
+        bmi = st.slider("BMI", 0.0, 70.0, 25.0)
+        dpf = st.slider("Diabetes Pedigree Function", 0.0, 3.0, 0.5)
+        age = st.slider("Age", 18, 100, 30)
 
-st.markdown("---")
-st.markdown("### 🔍 Glucose vs BMI")
+        input_data = [
+            pregnancies, glucose, blood_pressure, skin_thickness,
+            insulin, bmi, dpf, age
+        ]
 
-# Scatter Plot
-fig, ax = plt.subplots()
-ax.scatter(filtered_df["Glucose"], filtered_df["BMI"], alpha=0.7, color="teal")
-ax.set_xlabel("Glucose")
-ax.set_ylabel("BMI")
-ax.set_title("Glucose vs BMI (Filtered Data)")
-st.pyplot(fig)
+        # Train model
+        X = data.drop("Outcome", axis=1)
+        y = data["Outcome"]
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-st.markdown("---")
-st.markdown("### 🤖 Predict Diabetes Using Logistic Regression")
+        model = LogisticRegression(max_iter=1000)
+        model.fit(X_train, y_train)
+        y_pred = model.predict(X_test)
+        acc = accuracy_score(y_test, y_pred)
 
-# Model training (on full dataset)
-X = df.drop(["Id", "Outcome"], axis=1)
-y = df["Outcome"]
+        st.success(f"Model trained with accuracy: {acc:.2f}")
 
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        # Prediction
+        if st.button("Predict"):
+            result = predict_diabetes(model, input_data)
+            st.subheader("Prediction Result:")
+            st.info(f"The model predicts: **{result}**")
 
-model = LogisticRegression(max_iter=1000)
-model.fit(X_train, y_train)
-y_pred = model.predict(X_test)
-accuracy = accuracy_score(y_test, y_pred)
+    st.caption("Developed using Streamlit and scikit-learn")
 
-# Expandable section for model info
-with st.expander("📈 View Model Accuracy"):
-    st.write(f"Model Accuracy on Test Data: **{round(accuracy * 100, 2)}%**")
-
-st.caption("Developed using Streamlit and scikit-learn")
-
+# Entry point
 if __name__ == "__main__":
-    main(st.title("Diabetes Prediction and Analysis Dashboard"))
+    main()
